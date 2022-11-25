@@ -67,6 +67,15 @@ for(i in 1:nrow(data)){
 # Save the output to resSaves
 saveRDS(out_cite, "resSaves/citation_extraction.rds")
 
+# --------------------- #
+# Also do the same for altmetric #
+library(rAltmetric)
+library(purrr)
+
+# Get altmetric data
+alm <- function(x)  altmetrics(doi = x,apikey = "TBD") %>% altmetric_data()
+results <- pmap_df(list(data$newDOI), alm)
+
 # Format citation query
 
 # Format country names
