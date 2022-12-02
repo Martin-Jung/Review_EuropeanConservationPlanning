@@ -82,3 +82,7 @@ ggplot(df, aes(x=`Biodiversity type`, y = `Number of features`)) +
 
 # Idea 4: Very few studies across scales account for connectivity, land-use and stakeholders
 # - Simply assess statistics here and report
+
+# Idea 5: Management actions are usually ecosystem-specific and local scale
+
+# Idea 5: Patterns in planning purpose with stakeholders and scale?

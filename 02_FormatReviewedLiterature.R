@@ -18,12 +18,90 @@ dir.create("resSaves",showWarnings = FALSE)
 # Load and format the reviewed papers
 data <- read_xlsx("LiteratureExtracts/20220923_FilteredLiteratureFinal.xlsx",sheet = 1) |>
   filter(Suitable == 1)
+
+# ------------- #
+#### Format literature data ####
 # Format DOI
 data$newDOI <- stringr::str_replace_all(data$DOI, "http://dx.doi.org/","")
 data$newDOI <- str_replace_all(data$newDOI, "https://dx.doi.org/","")
 data$newDOI <- str_replace_all(data$newDOI, "Https://dx.doi.org/","")
 data$newDOI <- str_replace_all(data$newDOI, "https://doi.org/","")
 data$newDOI <- str_replace_all(data$newDOI, "https://","")
+
+# Make names
+names(data) <- make.names(names(data))
+
+# Format classes
+data$Extent <- factor(data$Extent, levels = c("Local", "National", "Regional", "Europe"))
+data$Realm <- factor(data$Realm, levels = c("Terrestrial", "Freshwater", "Marine", "Cross-realm"))
+data$Ecosystem.specificity <- fct_collapse(data$Ecosystem.specificity,
+                                     None = c("all", "All", "none", "None"),
+                                     ForestWoodland = c("Forest", "Woodland", "Forests"),
+                                     Wetlands = c("Wetlands", "Wetland"),
+                                     Urban = c("Urban"),
+                                     Grassland = c("Grassland"),
+                                     Cropland = c("Cropland"),
+                                     Coastal = c("Coastal benthic", "Coastal", "Coast"),
+                                     RiversLakes = c("Rivers and lakes", "Rivers","Rivers, Ponds, Lakes"),
+                                     Multiple = c("Cropland, Grassland","Shrubland, Cropland", "Rivers, Coastal",
+                                                  "Wetlands, Forest","Rivers, Estuary, Marine"),
+                                     other_level = "Other"
+                                     )
+data$Ecosystem.specificity[is.na(data$Ecosystem.specificity)] <- "None"
+
+data$Period <- factor(data$Period, levels = c("Contemporary only", "Future", "Both"))
+data$Planning.purpose <- factor(data$Planning.purpose, c("Representation", "Priority places", "Management action", "Synergies/Tradeoffs", "Multiple"))
+data$Method <- fct_collapse(data$Method,
+                            "Marxan*" = "Marxan*", "Zonation" = "Zonation", "Integer programming" = "Integer programming",
+                            "GIS Overlay" = c("GIS overlay/ Ranking / Clustering", "GIS overlay"),
+                            "Other" = c("Other", "NA"))
+data$Biodiversity.type <- factor(data$Biodiversity.type, levels = c("Species", "Ecosystems", "Ecosys. Services / NCP",
+                                                                    "Multiple", "Other"))
+data$Biodiversity.type[is.na(data$Biodiversity.type)] <- "Other"
+
+# Constraints, Connectivity and other features
+data$Multiple.objectives.or.constraints <- factor(data$Multiple.objectives.or.constraints,
+                                                  levels = c("None", "Costs", "Constrains", "Multi-objective/criteria",
+                                                             "Multiple", "Other"))
+data$Multiple.objectives.or.constraints[is.na(data$Multiple.objectives.or.constraints)] <- "Other"
+
+data$Connectivity <- factor(data$Connectivity, levels = c("None","Boundary", "Structural", "Functional", "Multiple"))
+data$Costs <- factor(data$Costs, levels = c("yes", "no"))
+
+data$Stakeholder.involvement <- factor(data$Stakeholder.involvement, levels = c("yes", "no"))
+
+# Policy relevance formatting
+po <- data$Policy.relevance
+po <- ifelse(is.na(po) | po %in% c("none", "None"), "None", po)
+po <- ifelse(str_detect(po, ","),"Multiple", ifelse(str_detect(tolower(po),"case study"),"Case study", ifelse(po == "None", "None", "Single") ) )
+data$Policy.relevance <- po
+data$Policy.relevance <- factor(data$Policy.relevance, levels = c("None", "Single", "Multiple", "Case study"))
+rm(po)
+
+# --- #
+# Format country names list
+co <- separate(data |> select(DOI,Region), col = Region,into = paste0("V",1:8), sep = ",") |> 
+  mutate_all(str_trim) |> 
+  # Reshape to longer using doi as ID
+  reshape2::melt(id.vars = "DOI") |> dplyr::select(-variable) |> distinct() |> drop_na(value) |> 
+  rename(country = value)
+# sort(unique(co$country))
+# Some manual recoding
+co$country[co$country=="German"] <- "Germany"
+co$country[co$country=="Czechia"] <- "Czech Republic"
+co$country[co$country=="Mediteranean"] <- "Mediterranean"
+
+# Get NUTS files in here and match them against the names
+path_nuts <- "/mnt/pdrive/bec_data/200_processeddata/"
+nuts <- sf::st_read()
+
+# Locality and finer level, to do (later)!
+data$Locality  
+
+# --- #
+
+# Save final output
+saveRDS(data, "resSaves/literature_formatted.rds")
 
 # ------------- #
 #### Use Plum-X to gather citation metrics
@@ -119,10 +197,3 @@ assert_that(
   all(out_form$cite_scientific>=0)
 )
 saveRDS(out_form, "resSaves/citation_extraction_formatted.rds")
-
-# Format country names
-
-
-# Format other labels
-
-# Save final output
