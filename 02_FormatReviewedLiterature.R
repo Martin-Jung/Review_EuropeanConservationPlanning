@@ -66,9 +66,9 @@ data$Multiple.objectives.or.constraints <- factor(data$Multiple.objectives.or.co
 data$Multiple.objectives.or.constraints[is.na(data$Multiple.objectives.or.constraints)] <- "Other"
 
 data$Connectivity <- factor(data$Connectivity, levels = c("None","Boundary", "Structural", "Functional", "Multiple"))
-data$Costs <- factor(data$Costs, levels = c("yes", "no"))
+data$Costs <- factor(data$Costs, levels = c("no", "yes"))
 
-data$Stakeholder.involvement <- factor(data$Stakeholder.involvement, levels = c("yes", "no"))
+data$Stakeholder.involvement <- factor(data$Stakeholder.involvement, levels = c("no", "yes"))
 
 # Policy relevance formatting
 po <- data$Policy.relevance
@@ -80,23 +80,32 @@ rm(po)
 
 # --- #
 # Format country names list
-co <- separate(data |> select(DOI,Region), col = Region,into = paste0("V",1:8), sep = ",") |> 
-  mutate_all(str_trim) |> 
+co <- separate(data |> select(DOI,Region), col = Region,into = paste0("V",1:8), sep = ",") |>
+  mutate_all(str_trim) |>
   # Reshape to longer using doi as ID
-  reshape2::melt(id.vars = "DOI") |> dplyr::select(-variable) |> distinct() |> drop_na(value) |> 
+  reshape2::melt(id.vars = "DOI") |> dplyr::select(-variable) |> distinct() |> drop_na(value) |>
   rename(country = value)
 # sort(unique(co$country))
+
+# Get spatial files in here and match them against the names
+path_terresttrial <- "extdata/TerrestrialRegions.gpkg"
+regions <- sf::st_read(path_terresttrial)
+
 # Some manual recoding
 co$country[co$country=="German"] <- "Germany"
-co$country[co$country=="Czechia"] <- "Czech Republic"
 co$country[co$country=="Mediteranean"] <- "Mediterranean"
+co$country[co$country=="Serbia"] <- "Republic of Serbia"
+co$country[co$country=="Czech Republic"] <- "Czechia"
+co$country[co$country=="Macedonia"] <- "North Macedonia"
+co$country[co$country=="Macedonia"] <- "Cyprus"
 
-# Get NUTS files in here and match them against the names
-path_nuts <- "/mnt/pdrive/bec_data/200_processeddata/"
-nuts <- sf::st_read()
+co$country[which(!co$country %in% regions$SOVEREIGNT)]
+
+# Save output
+saveRDS(co, "resSaves/location_match.rds")
 
 # Locality and finer level, to do (later)!
-data$Locality  
+data$Locality
 
 # --- #
 
