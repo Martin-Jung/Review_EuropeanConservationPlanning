@@ -18,6 +18,11 @@ mytheme <- theme_gray(base_size = 20) +
                                    colour = NA_character_), # necessary to avoid drawing plot outline
     legend.background = element_rect(fill = "transparent"),
     legend.box.background = element_rect(fill = "transparent", colour = NA),
+    # Colour background stuff
+    axis.ticks = element_line(color = "white"),
+    axis.text = element_text(color = "white"),
+    plot.title = element_text(colour ="white"),
+    axis.title = element_text(colour ="white"),
     legend.key = element_rect(fill = "transparent")
   )
 # --- #
@@ -60,7 +65,7 @@ o <- df |> group_by(Extent, Year) |> summarise(N = n()) |> arrange(Year)
 ggplot(o, aes(x = Year, y = N, colour = Extent)) +
   mytheme +
   # geom_line(size = 1.5) +
-  geom_smooth(size = 1.5, se = FALSE,method = "loess") +
+  geom_smooth(linewidth = 1.5, se = FALSE,method = "loess") +
   scale_y_continuous(breaks = pretty_breaks(10)) +
   scale_colour_aaas() +
   theme(legend.position = c(.2,.75)) +
@@ -111,17 +116,52 @@ o <- bind_rows(o1,o2, o3,o4)
 # Build plot by plot
 ggplot(o, aes(x = var1, y = var2, size = n, colour = prop)) +
   mytheme +
-  geom_point() +
-  scale_size_binned(guide = guide_legend("Number of studies")) +
-  scale_colour_gradientn(colours = scico(50, palette = "roma",direction = -1),
+  geom_point(stroke = 1) +
+  scale_size_binned(guide = guide_legend("Number of studies",override.aes = list(colour="white"))) +
+  scale_colour_gradientn(colours = viridis::turbo(50),
                          guide = guide_colorbar("Proportion", barwidth = unit(3,'in'), title.vjust = .75)) +
   theme(legend.position = "bottom", legend.box = "horizontal",legend.box.background = element_rect(color = NA)) +
   labs(x = "", y = "") +
   facet_wrap(~type,scales = "free_y",nrow = 2) +
   theme(axis.text.x.bottom = element_text(hjust = 1, angle = 45)) +
   # Reduce distance between y-axis
-  theme(plot.title = element_text(hjust = 0.5))
-ggsave("figures/exploratory_bubble.png",width = 10,height = 10,dpi = 400)
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.text = element_text(color = "white"), legend.title = element_text(color = "white") )
+ggsave("figures/exploratory_bubble.png",width = 12,height = 10,dpi = 400)
+
+#### Create spatial map of density of studies ####
+# Take the location information from extData and rasterize with each study
+# Then stack and plot
+library(raster)
+library(sf)
+template <- raster("../../BIOCLIMA/bioclima_code/data/referenceraster_10000.tif")
+
+terrestrial <- st_read("extdata/TerrestrialRegions.gpkg") |> st_transform(crs = st_crs(template))
+marine <- st_read("extdata/MarineRegions.gpkg") |> st_transform(crs = st_crs(template))
+
+out <- raster::stack()
+for(id in 1:nrow(df)){
+  print(id)
+  sub <- slice(df, id)
+  # Rasterize depending on Realm
+  if(sub$Realm == "Marine"){
+    m <- marine |> filter(SOVEREIGN1 == sub$Region)
+    if(nrow(m)>0){
+      o <- rasterize(m, template, 1)
+      out <- raster::addLayer(out, o)
+    }
+  } else {
+    m <- terrestrial |> filter(SOVEREIGNT == sub$Region)
+    if(nrow(m)>0){
+      o <- rasterize(m, template, 1)
+      out <- raster::addLayer(out, o)
+    }
+  }
+}
+raster::nlayers(out)
+
+ras <- sum(out, na.rm = TRUE)
+plot(ras, col = ibis.iSDM:::ibis_colours$sdm_colour )
 
 #### Specific plots and hypotheses ####
 
