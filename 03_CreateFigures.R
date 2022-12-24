@@ -49,10 +49,40 @@ table(df$Realm); table(df$Realm)/nrow(df)
 # Number of studies with different planning purpose
 table(df$Planning.purpose); table(df$Planning.purpose) / nrow(df)
 
+# Approach
+table(df$Method); table(df$Method) / nrow(df)
+
+# Connectivity
+table(df$Connectivity); table(df$Connectivity) / nrow(df)
+0.154 + 0.0553 + 0.0197
+
+# Current or future
+table(df$Period); table(df$Period) / nrow(df)
+sum((table(df$Period) / nrow(df))[-1])
+
+# Stakeholders
+table(df$Stakeholder.involvement); table(df$Stakeholder.involvement) / nrow(df)
+
+# Land-use constraints
+df2 <- df |> filter(Planning.purpose!='Representation')
+sum((table(df2$Multiple.objectives.or.constraints)/nrow(df))[-1])
+
 o <- left_join(df, cit, by = c("newDOI" = "doi")) |> select(Extent, cite_socialmedia:cite_policy)
 Hmisc::describe(o$cite_socialmedia)
 Hmisc::describe(o$cite_scientific)
 Hmisc::describe(o$cite_policy)
+
+# Number of features per type
+df |> group_by(Biodiversity.type) |> summarise(m = mean(Number.of.features,na.rm=T))
+
+# Is there any study that ticks all the boxes?
+o <- df
+o$score <- ifelse(o$Multiple.objectives.or.constraints=="None",0,1) +
+  ifelse(o$Period=="Contemporary only",0,1) +
+  ifelse(o$Connectivity == "None", 0, 1) +
+   ifelse(o$Stakeholder.involvement=="no", 0, 1)
+o |> filter(score == 4)
+
 
 # ----------- #
 #### Basic plots ####
@@ -116,11 +146,13 @@ o <- bind_rows(o1,o2, o3,o4)
 # Build plot by plot
 ggplot(o, aes(x = var1, y = var2, size = n, colour = prop)) +
   mytheme +
+  geom_point(stroke = 2,colour="black",show.legend = FALSE) +
   geom_point(stroke = 1) +
-  scale_size_binned(guide = guide_legend("Number of studies",override.aes = list(colour="white"))) +
-  scale_colour_gradientn(colours = viridis::turbo(50),
+  scale_size_area(guide = guide_legend("Number of studies",override.aes = list(colour="white"))) +
+  scale_colour_gradientn(colours = viridis::inferno(50),
                          guide = guide_colorbar("Proportion", barwidth = unit(3,'in'), title.vjust = .75)) +
   theme(legend.position = "bottom", legend.box = "horizontal",legend.box.background = element_rect(color = NA)) +
+  geom_text(aes(label = paste0(n)), colour = "black",nudge_y = .4, size = 4) +
   labs(x = "", y = "") +
   facet_wrap(~type,scales = "free_y",nrow = 2) +
   theme(axis.text.x.bottom = element_text(hjust = 1, angle = 45)) +
@@ -133,80 +165,224 @@ ggsave("figures/exploratory_bubble.png",width = 12,height = 10,dpi = 400)
 # Take the location information from extData and rasterize with each study
 # Then stack and plot
 library(raster)
+library(RStoolbox)
 library(sf)
 template <- raster("../../BIOCLIMA/bioclima_code/data/referenceraster_10000.tif")
 
-terrestrial <- st_read("extdata/TerrestrialRegions.gpkg") |> st_transform(crs = st_crs(template))
-marine <- st_read("extdata/MarineRegions.gpkg") |> st_transform(crs = st_crs(template))
+terrestrial <- st_read("extdata/TerrestrialRegions.gpkg") |> st_transform(crs = st_crs(template)) |>
+  filter(!SOVEREIGNT %in% c("Iceland", "Moldova"))
+marine <- st_read("extdata/MarineRegions.gpkg") |> st_transform(crs = st_crs(template)) |>
+  filter(!(GEONAME %in% c("Jan Mayen Exclusive Economic Zone","Joint regime area Iceland / Norway (Jan Mayen)",
+                           "Icelandic Exclusive Economic Zone",
+                          "Greenlandic Exclusive Economic Zone")))
 
+df$Region[df$Region=="Mediteranean"] <- "Mediterranean"
 out <- raster::stack()
 for(id in 1:nrow(df)){
   print(id)
-  sub <- slice(df, id)
+  sub <- slice(df, id) |>
+    left_join(locations, by = c("DOI" = "DOI"))
   # Rasterize depending on Realm
-  if(sub$Realm == "Marine"){
-    m <- marine |> filter(SOVEREIGN1 == sub$Region)
+  if(all(sub$Realm == "Marine")){
+    if(all(sub$Region == "Europe")){
+      m  <- marine
+    } else {
+      if(all(sub$Region == "Mediterranean")){
+        #FIXME: Dirty hack for now. Need to properly filter to region
+        m <- marine |> filter(SOVEREIGN1 %in% c("Spain", "France", "Italy", "Croatia", "Greece","Cyprus",
+                                                "Morocco",
+                                                "Lebanon", "Egypt","Libya", "Malta", "Syria", "Turkey","Monaco",
+                                                "Tunisia", "Montenegro", "Albania", "Palestine", "Israel",
+                                                "Bosnia and Herzegovina", "Slovenia", "Algeria"))
+      } else if(all(sub$Region == "Adriatic-Ionian Region")) {
+        m <- marine |> filter(SOVEREIGN1 %in% c("Italy","Croatia", "Slovenia", "Greece","Montenegro","Albania","Bosnia and Herzegovina", "Slovenia"))
+      } else { m <- marine |> filter(SOVEREIGN1 %in% sub$country) }
+    }
     if(nrow(m)>0){
       o <- rasterize(m, template, 1)
       out <- raster::addLayer(out, o)
-    }
+    } else { stop()}
   } else {
-    m <- terrestrial |> filter(SOVEREIGNT == sub$Region)
+    if(all(sub$Region == "Europe")){
+      m <- terrestrial
+    } else {
+      if(all(sub$Region == "Mediterranean")){
+        #FIXME: Dirty hack for now. Need to properly filter to region
+        m <- terrestrial |> filter(SOVEREIGNT %in% c("Spain", "France", "Italy", "Croatia", "Greece","Cyprus",
+                                                "Morocco", "Vatican", "Northern Cyprus", "Cyprus No Mans Area",
+                                                "San Marino", "Andorra", "Portugal","Vatican",
+                                                "Lebanon", "Egypt","Libya", "Malta", "Syria", "Turkey","Monaco",
+                                                "Tunisia", "Montenegro", "Albania", "Palestine", "Israel",
+                                                "Bosnia and Herzegovina", "Slovenia", "Algeria"))
+      } else if(all(sub$Region=="Alpes")){
+        m <- terrestrial |> filter(SOVEREIGNT %in% c("Austria", "Switzerland"))
+      } else if(all(sub$Region == "Danube catchment")){
+        m <- terrestrial |> filter(SOVEREIGNT %in% c("Austria", "Bulgaria","Hungary","Romania","Germany", "Croatia"))
+      } else { m <- terrestrial |> filter(SOVEREIGNT %in% sub$country) }
+    }
     if(nrow(m)>0){
       o <- rasterize(m, template, 1)
       out <- raster::addLayer(out, o)
-    }
+    } else {stop()}
   }
 }
 raster::nlayers(out)
 
 ras <- sum(out, na.rm = TRUE)
+ras[ras==0] <- NA
 plot(ras, col = ibis.iSDM:::ibis_colours$sdm_colour )
 
+# m <- raster::mask(ras, template, inverse = TRUE)
+
+# Clip terrestrial to European extent
+ter <- terrestrial |> st_crop(extent(ras))
+
+ggR(ras, geom_raster=TRUE) +
+  mytheme + theme(panel.background = element_blank()) +
+  scale_fill_gradientn(colors = scico(100, palette = "hawaii", direction = -1), na.value = NA,
+                       guide = guide_colourbar(title = "Number of studies",barwidth = unit(3, 'in'),
+                                               label.theme = element_text(color = "white",size = 20),
+                                               title.theme = element_text(color = "white",size = 19)  ) ) +
+  geom_sf(data = ter, fill = NA, colour = "grey90", linewidth = .75, show.legend = FALSE) +
+  theme(legend.position = "bottom",axis.ticks = element_blank(), axis.text = element_blank()) + labs(x = "", y = "")
+ggsave(plot = last_plot(),"figures/map_densitystudies.png", width = 8, height = 8,dpi = 400)
+
 #### Specific plots and hypotheses ####
+# Here we explore specific hypotheses surrounding the collated citation information
 
 # ---- #
 # Idea 1: Are studies of larger study extent more often cited in research and policy contexts
-o <- left_join(df, cit, by = c("newDOI" = "doi")) |> select(Extent, cite_socialmedia:cite_policy)
+o <- left_join(df, cit, by = c("newDOI" = "doi")) |> select(Extent,Year, cite_socialmedia:cite_policy)
 
 # Test
 cor.test(o$cite_socialmedia, o$cite_scientific) # Social media does not explain citation rate
 cor.test(o$cite_socialmedia, o$cite_policy) # Also not in policy documents
 cor.test(o$cite_scientific, o$cite_policy) # However more widely cited papers are more likely to be also cited by policy
-glm(o$cite_scientific~o$Extent) |> summary() # Scientifically, no difference
-glm(o$cite_policy~o$Extent) |> summary() # European -wide study are slightly more likely to be cited
-glm(o$cite_socialmedia~o$Extent) |> summary()
-plot(effects::allEffects(glm(cite_policy~Extent,data=o,family = "poisson")))#
-plot(pdp::partial(glm(cite_policy~Extent,data=o),"Extent"))
 
-fit <- inla(cite_policy~Extent, data=o,family = "zeroinflatedpoisson1",
-            quantiles =  c(.05,.5, .95),control.predictor = list(compute=TRUE))
-fit <- inla(cite_scientific~Extent, data=o,family = "poisson",quantiles =  c(.05,.5, .95))
-fit <- inla(cite_socialmedia~Extent, data=o,family = "poisson",quantiles =  c(.05,.5, .95))
+# Fit zero-inflated bayesian Poisson regressions
+# fit <- glmer(cite_policy~Extent + (1|Year), data = o, family = poisson()) # Scientifically, no difference
+fit1 <- brm(cite_scientific~Extent + (1|Year), data = o, family = zero_inflated_poisson(),backend = "cmdstanr") # Scientifically, no difference
+fit2 <- brm(cite_policy~Extent + (1|Year), data = o, family = zero_inflated_poisson(),backend = "cmdstanr") # Scientifically, no difference
+
+# Get conditional effects
+me1 <- conditional_effects(fit1,
+                           re_formula = NA, # Include group level effects
+                           prob = 0.95
+)
+me2 <- conditional_effects(fit2,
+                    re_formula = NA, # Include group level effects
+                    prob = 0.95
+                    )
+o <- bind_rows(
+  me1$Extent |> mutate(type = "Scientific literature"),
+  me2$Extent |> mutate(type = "Policy documents")
+)
+
+ggplot(o, aes(x = Extent, y = estimate__, ymin = lower__, ymax = upper__)) +
+  mytheme +
+  geom_pointrange(size = 1.5, linewidth = 1.2) +
+  scale_y_continuous(breaks = pretty_breaks(4)) +
+  facet_wrap(~type,scales = "free_y") +
+  labs(x = "", y = "Relative citation rate")
+ggsave("figures/test_citationrates.png",plot = last_plot(),width = 9,height =4,dpi = 400)
+
+# ---- #
+# Idea 2: Are more complex or comprehensive studies more cited?
+o <- left_join(df, cit, by = c("newDOI" = "doi"))
+# More complex if accounting for all factors
+o$bin_landuse <- ifelse(o$Multiple.objectives.or.constraints=="None",0,1) |> factor()
+o$bin_connect <- ifelse(o$Connectivity == "None", 0, 1) |> factor()
+o$bin_cost <- ifelse(o$Costs == "no", 0, 1) |> factor()
+o$bin_stake <- ifelse(o$Stakeholder.involvement=="no", 0, 1) |> factor()
+
+fit <- glmer(cite_scientific ~bin_landuse + bin_connect + bin_cost + bin_stake + (1|Year), data = o, family = poisson())
+fit <- glmer(cite_policy ~bin_landuse + bin_connect + bin_cost + bin_stake + (1|Year), data = o, family = poisson())
 summary(fit)
+plot(effects::allEffects(fit))
+
+# Fit zero-inflated bayesian Poisson regressions
+fit1 <- brm(cite_scientific ~bin_landuse + bin_connect + bin_cost + bin_stake + (1|Year), data = o, family = zero_inflated_poisson(),backend = "cmdstanr")
+fit2 <- brm(cite_policy~bin_landuse + bin_connect + bin_cost + bin_stake + (1|Year), data = o, family = zero_inflated_poisson(),backend = "cmdstanr")
+
+# Get conditional effects
+me1 <- conditional_effects(fit1,
+                           re_formula = NA, # Include group level effects
+                           prob = 0.95
+)
+me2 <- conditional_effects(fit2,
+                           re_formula = NA, # Include group level effects
+                           prob = 0.95
+)
+
+o <- bind_rows(
+  bind_rows(me1$bin_landuse,me1$bin_connect,me1$bin_cost, me1$bin_stake) |>
+    mutate(type = "Scientific literature"),
+  bind_rows(me2$bin_landuse,me2$bin_connect,me2$bin_cost, me2$bin_stake) |>
+    mutate(type = "Policy documents")
+) |> dplyr::select(type, bin_landuse, bin_connect, bin_cost, bin_stake, estimate__, lower__, upper__) |>
+  pivot_longer(cols = bin_landuse:bin_stake)
+o$name <- factor(o$name, levels = c("bin_landuse","bin_connect","bin_cost","bin_stake"),
+                 labels = c("Land use", "Connectivity", "Costs", "Stakeholders"))
+o <- o |> filter(value=="1")
+
+ggplot(o, aes(x = name, y = estimate__, ymin = lower__, ymax = upper__)) +
+  mytheme +
+  geom_pointrange(size = 1.5, linewidth = 1.2,position = position_dodge(.5)) +
+  scale_y_continuous(breaks = pretty_breaks(4)) +
+  facet_wrap(~type,scales = "free_y") +
+  theme(axis.text.x.bottom = element_text(size = 16)) +
+  labs(x = "", y = "Relative citation rate")
+ggsave("figures/test_citationrates_complexity.png",plot = last_plot(),width = 10.5,height =4,dpi = 400)
+
 
 # ---- #
 # Idea 2: Are Local and national studies more likely to incorporate stakeholder feedback
+o <- left_join(df, cit, by = c("newDOI" = "doi")) |> select(Policy.relevance, cite_socialmedia:cite_policy)
 
 
 # ---- #
-# Idea 3: Are studies that are refeering to specific policies also more cited in policy agendas?
-o <- left_join(df, cit, by = c("newDOI" = "doi")) |> select(Policy.relevance, cite_socialmedia:cite_policy)
+# Idea 3: Are studies that are referring to specific policies also more cited in policy agendas?
+o <- left_join(df, cit, by = c("newDOI" = "doi")) |> select(Policy.relevance,Year, cite_socialmedia:cite_policy)
 
-glm(o$cite_policy~o$Policy.relevance, family = "poisson") |> summary() # European -wide study are slightly more likely to be cited
-fit <- brm(cite_policy~Policy.relevance, data=o, family = zero_inflated_poisson(),backend = "cmdstanr")
-brms::marginal_effects(fit)
-#plot(effects::allEffects(glm(cite_policy~Policy.relevance,data=o,family = "poisson")), lines = T)#
+#fit <- glmer(cite_policy~Policy.relevance + (1|Year), data=o, family = poisson() )
+#plot(effects::allEffects(fit))
+fit1 <- brm(cite_policy~Policy.relevance, data=o, family = zero_inflated_poisson(),backend = "cmdstanr")
+fit2 <- brm(cite_scientific~Policy.relevance, data=o, family = zero_inflated_poisson(),backend = "cmdstanr")
+
+# Get conditional effects
+me1 <- conditional_effects(fit1,
+                           re_formula = NA, # Include group level effects
+                           prob = 0.95
+)
+me2 <- conditional_effects(fit2,
+                           re_formula = NA, # Include group level effects
+                           prob = 0.95
+)
+o <- bind_rows(
+  me1$Policy.relevance |> mutate(type = "Policy documents"),
+  me2$Policy.relevance |> mutate(type = "Scientific literature")
+)
+
+ggplot(o, aes(x = Policy.relevance, y = estimate__, ymin = lower__, ymax = upper__)) +
+  mytheme +
+  geom_pointrange(size = 1.5, linewidth = 1.2) +
+  scale_y_continuous(breaks = pretty_breaks(4)) +
+  facet_wrap(~type,scales = "free_y") +
+  labs(x = "", y = "Relative citation rate")
+ggsave("figures/test_citationrates_policy.png",plot = last_plot(),width = 9.5,height =4,dpi = 400)
+
 
 # ---- #
 # Idea 4: Does an involvement of stakeholders increase the number of citations (scientific and policy-wise)
 o <- left_join(df, cit, by = c("newDOI" = "doi")) #|> select(Extent,Year,Planning.purpose, Stakeholder.involvement, cite_scientific:cite_policy)
 
-fit <- glmer(cite_scientific ~ Stakeholder.involvement + Planning.purpose + (1|Year), data =o, family = poisson())
+fit <- glmer(cite_scientific ~ Stakeholder.involvement  + (1|Year), data =o, family = poisson())
 summary(fit)
 plot(effects::allEffects(fit))
 
 # ---- #
 # Idea 5: Management actions are usually ecosystem-specific and local scale
+
+o <- df |> filter(Planning.purpose=="Management action")
 
 
