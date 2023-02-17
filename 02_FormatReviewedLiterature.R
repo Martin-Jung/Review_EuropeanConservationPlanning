@@ -42,9 +42,10 @@ data$Ecosystem.specificity <- fct_collapse(data$Ecosystem.specificity,
                                      Grassland = c("Grassland"),
                                      Cropland = c("Cropland"),
                                      Coastal = c("Coastal benthic", "Coastal", "Coast"),
-                                     RiversLakes = c("Rivers and lakes", "Rivers","Rivers, Ponds, Lakes"),
+                                     RiversLakes = c("Rivers and lakes", "Rivers","Rivers, Ponds, Lakes", "Rivers, Lakes"),
                                      Multiple = c("Cropland, Grassland","Shrubland, Cropland", "Rivers, Coastal",
-                                                  "Wetlands, Forest","Rivers, Estuary, Marine"),
+                                                  "Wetlands, Forest","Rivers, Estuary, Marine", "Rivers, Estuary, Marine",
+                                                  "Forest, Sparse Vegetation, Cropland", "AgroSystems"),
                                      other_level = "Other"
                                      )
 data$Ecosystem.specificity[is.na(data$Ecosystem.specificity)] <- "None"
@@ -105,7 +106,7 @@ co$country[which(!co$country %in% regions$SOVEREIGNT)]
 saveRDS(co, "resSaves/location_match.rds")
 
 # Locality and finer level, to do (later)!
-data$Locality
+# data$Locality
 
 # --- #
 

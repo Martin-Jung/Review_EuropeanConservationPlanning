@@ -19,10 +19,10 @@ mytheme <- theme_gray(base_size = 20) +
     legend.background = element_rect(fill = "transparent"),
     legend.box.background = element_rect(fill = "transparent", colour = NA),
     # Colour background stuff
-    axis.ticks = element_line(color = "white"),
-    axis.text = element_text(color = "white"),
-    plot.title = element_text(colour ="white"),
-    axis.title = element_text(colour ="white"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(color = "black"),
+    plot.title = element_text(colour ="black"),
+    axis.title = element_text(colour ="black"),
     legend.key = element_rect(fill = "transparent")
   )
 # --- #
@@ -167,7 +167,8 @@ ggsave("figures/exploratory_bubble.png",width = 12,height = 10,dpi = 400)
 library(raster)
 library(RStoolbox)
 library(sf)
-template <- raster("../../BIOCLIMA/bioclima_code/data/referenceraster_10000.tif")
+template <- raster("../../BIOCLIMA/data/referenceraster_10000.tif")
+# template <- raster("../../BIOCLIMA/bioclima_code/data/referenceraster_10000.tif")
 
 terrestrial <- st_read("extdata/TerrestrialRegions.gpkg") |> st_transform(crs = st_crs(template)) |>
   filter(!SOVEREIGNT %in% c("Iceland", "Moldova"))
