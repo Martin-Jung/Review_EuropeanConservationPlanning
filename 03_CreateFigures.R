@@ -14,7 +14,7 @@ mytheme <- theme_bw(base_size = 20) +
   theme(
     panel.background = element_rect(#fill = "transparent",
                                     colour = NA_character_), # necessary to avoid drawing panel outline
-    plot.background = element_rect(fill = "transparent",
+    plot.background = element_rect(fill = "white",
                                    colour = NA_character_), # necessary to avoid drawing plot outline
     legend.background = element_rect(fill = "transparent"),
     legend.box.background = element_rect(fill = "transparent", colour = NA),
@@ -43,6 +43,8 @@ dir.create("figures", showWarnings = FALSE)
 # Number of studies per extent
 table(df$Extent);table(df$Extent)/nrow(df)
 
+sort(table(locations$country),decreasing = TRUE) / nrow(locations)
+
 # Number of studies per Realm
 table(df$Realm); table(df$Realm)/nrow(df)
 
@@ -52,9 +54,19 @@ table(df$Planning.purpose); table(df$Planning.purpose) / nrow(df)
 # Approach
 table(df$Method); table(df$Method) / nrow(df)
 
+# Ecosystem specificity
+table(df$Ecosystem.specificity); table(df$Ecosystem.specificity) / nrow(df)
+
+# Number of features per type
+df |> count(Biodiversity.type) / nrow(df)
+df |> group_by(Biodiversity.type) |> summarise(m = mean(Number.of.features, na.rm=T),
+                                               min = min(Number.of.features, na.rm = TRUE),
+                                               max = max(Number.of.features, na.rm = TRUE))
+
+# --- #
 # Connectivity
 table(df$Connectivity); prop <- table(df$Connectivity) / nrow(df)
-sum(prop[-1])
+sum(prop[-1]) # How many assessed anything in this direction
 
 # Current or future
 table(df$Period); table(df$Period) / nrow(df)
@@ -65,15 +77,14 @@ table(df$Stakeholder.involvement); table(df$Stakeholder.involvement) / nrow(df)
 
 # Land-use constraints
 df2 <- df |> filter(Planning.purpose!='Representation')
-sum((table(df2$Multiple.objectives.or.constraints)/nrow(df))[-1])
+table(df2$Multiple.objectives.or.constraints)
+sum((table(df2$Multiple.objectives.or.constraints)/nrow(df2))[-1])
 
-o <- left_join(df, cit, by = c("newDOI" = "doi")) |> select(Extent, cite_socialmedia:cite_policy)
-Hmisc::describe(o$cite_socialmedia)
-Hmisc::describe(o$cite_scientific)
-Hmisc::describe(o$cite_policy)
+# Policy context
+(prop <- table(df$Policy.relevance) / nrow(df))
+sum(prop[-1]) # How many out of all?
 
-# Number of features per type
-df |> group_by(Biodiversity.type) |> summarise(m = mean(Number.of.features,na.rm=T))
+colSums( table(df$Policy.relevance, df$Method)[-1,] )
 
 # Is there any study that ticks all the boxes?
 o <- df
@@ -82,6 +93,12 @@ o$score <- ifelse(o$Multiple.objectives.or.constraints=="None",0,1) +
   ifelse(o$Connectivity == "None", 0, 1) +
    ifelse(o$Stakeholder.involvement=="no", 0, 1)
 o |> filter(score == 4)
+
+# --- #
+o <- left_join(df, cit, by = c("newDOI" = "doi")) |> select(Extent, cite_socialmedia:cite_policy)
+Hmisc::describe(o$cite_socialmedia)
+Hmisc::describe(o$cite_scientific)
+Hmisc::describe(o$cite_policy)
 
 
 # ----------- #
@@ -164,6 +181,50 @@ ggplot(o, aes(x = var1, y = var2, size = n, colour = prop)) +
   theme(plot.title = element_text(hjust = 0.5),
         legend.text = element_text(color = "black"), legend.title = element_text(color = "black") )
 ggsave("figures/exploratory_bubble.png",width = 12,height = 10,dpi = 400)
+
+#### Supplementary figures ####
+# SI Figure 1 #
+# Summarize the number of features per type
+
+# Calculate averages
+m <- df |> group_by(Biodiversity.type) |> summarise(m = mean(Number.of.features, na.rm=T),
+                                                    sd = sd(Number.of.features, na.rm = TRUE),
+                                               min = min(Number.of.features, na.rm = TRUE),
+                                               max = max(Number.of.features, na.rm = TRUE))
+
+o <- df |> group_by(Biodiversity.type, Year) |> summarise(N = n()) |>
+  arrange(Year) |> tidyr::drop_na(N)
+
+
+g1 <- ggplot(df, aes(x = Biodiversity.type, y = Number.of.features)) +
+  mytheme +
+  geom_violin( fill = "grey90") +
+    geom_jitter(size = 1.5,width = .25) +
+    # Add averages
+    geom_point(data = m, aes(y = m), size = 5, colour = "red") +
+  scale_y_log10() +
+  theme(legend.title = element_text(size = 27), legend.text = element_text(size = 25),
+        axis.title = element_text(size = 26) ,axis.text = element_text(size = 26)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(y = expression(log10(Features)), x = "")
+ggsave(filename = "figures/SI_Figure1.png", plot = g1, width = 8, height = 8, dpi = 400)
+
+
+# --- #
+# SI Figure 2
+# Does stakeholder involvement differ by spatial extent?
+table(df$Stakeholder.involvement, df$Extent)
+
+o <- df %>% count(Stakeholder.involvement, Extent, .drop = FALSE)
+
+ggplot(o, aes(x = factor(Extent), y = n, fill = factor(Stakeholder.involvement))) +
+  mytheme +
+  geom_bar(stat = "identity",position = position_dodge()) +
+  scale_fill_npg() +
+    guides( fill = guide_legend(title = "Involvement\nstakeholders") ) +
+    theme(legend.position = c(.7, .7)) +
+  labs(x = "", y = "Number of studies")
+ggsave("figures/SI_Figure2.png", width = 6,height = 7, dpi = 400)
 
 #### Create spatial map of density of studies ####
 # Take the location information from extData and rasterize with each study
