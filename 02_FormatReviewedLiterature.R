@@ -96,6 +96,8 @@ co <- separate(data |> select(DOI,Region), col = Region,into = paste0("V",1:8), 
 # Get spatial files in here and match them against the names
 # path_terresttrial <- "extdata/TerrestrialRegions.gpkg"
 # regions <- sf::st_read(path_terresttrial)
+path_terrestrial <- "extdata/TerrestrialRegions.gpkg"
+regions <- sf::st_read(path_terrestrial)
 
 # Some manual recoding
 co$country[co$country=="German"] <- "Germany"
@@ -109,6 +111,7 @@ co$country[which(!co$country %in% regions$SOVEREIGNT)]
 assertthat::assert_that(!anyNA(co$country))
 
 # Save output
+assertthat::assert_that(!anyNA(co$country))
 saveRDS(co, "resSaves/location_match.rds")
 
 # Locality and finer level, to do (later)!
