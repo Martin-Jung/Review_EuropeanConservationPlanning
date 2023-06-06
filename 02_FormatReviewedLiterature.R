@@ -1,6 +1,7 @@
 # Packages
 library(tidyverse)
 library(readxl)
+library(sf)
 library(ggplot2)
 library(stringr)
 library(lubridate)
@@ -40,17 +41,20 @@ data$Ecosystem.specificity <- fct_collapse(data$Ecosystem.specificity,
                                      Wetlands = c("Wetlands", "Wetland"),
                                      Urban = c("Urban"),
                                      Grassland = c("Grassland"),
-                                     Cropland = c("Cropland"),
+                                     Cropland = c("Cropland", "Farmland"),
                                      Coastal = c("Coastal benthic", "Coastal", "Coast"),
-                                     RiversLakes = c("Rivers and lakes", "Rivers","Rivers, Ponds, Lakes", "Rivers, Lakes"),
+                                     RiversLakes = c("Rivers and lakes", "Rivers", "River","Rivers, Ponds, Lakes", "Rivers, Lakes",
+                                                     "Rivers, Ponds", "Riverine floodplains"),
                                      Multiple = c("Cropland, Grassland","Shrubland, Cropland", "Rivers, Coastal",
                                                   "Wetlands, Forest","Rivers, Estuary, Marine", "Rivers, Estuary, Marine",
                                                   "Forest, Sparse Vegetation, Cropland", "AgroSystems"),
                                      other_level = "Other"
                                      )
 data$Ecosystem.specificity[is.na(data$Ecosystem.specificity)] <- "None"
+assertthat::assert_that(!any(is.na(data$Ecosystem.specificity)))
 
 data$Period <- factor(data$Period, levels = c("Contemporary only", "Future", "Both"))
+data$Period[is.na(data$Period)] <- "Contemporary only"
 data$Planning.purpose <- factor(data$Planning.purpose, c("Representation", "Priority places", "Management action", "Synergies/Tradeoffs", "Multiple"))
 data$Method <- fct_collapse(data$Method,
                             "Marxan*" = "Marxan*", "Zonation" = "Zonation", "Integer programming" = "Integer programming",
@@ -88,9 +92,10 @@ co <- separate(data |> select(DOI,Region), col = Region,into = paste0("V",1:8), 
   rename(country = value)
 # sort(unique(co$country))
 
+# TODO:
 # Get spatial files in here and match them against the names
-path_terresttrial <- "extdata/TerrestrialRegions.gpkg"
-regions <- sf::st_read(path_terresttrial)
+# path_terresttrial <- "extdata/TerrestrialRegions.gpkg"
+# regions <- sf::st_read(path_terresttrial)
 
 # Some manual recoding
 co$country[co$country=="German"] <- "Germany"
@@ -101,6 +106,7 @@ co$country[co$country=="Macedonia"] <- "North Macedonia"
 co$country[co$country=="Macedonia"] <- "Cyprus"
 
 co$country[which(!co$country %in% regions$SOVEREIGNT)]
+assertthat::assert_that(!anyNA(co$country))
 
 # Save output
 saveRDS(co, "resSaves/location_match.rds")
