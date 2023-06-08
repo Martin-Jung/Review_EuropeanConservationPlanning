@@ -95,11 +95,26 @@ o$score <- ifelse(o$Multiple.objectives.or.constraints=="None",0,1) +
 o |> filter(score == 4)
 
 # --- #
-o <- left_join(df, cit, by = c("newDOI" = "doi")) |> select(Extent, cite_socialmedia:cite_policy)
-Hmisc::describe(o$cite_socialmedia)
+o <- dplyr::left_join(df, cit, by = c("newDOI" = "doi")) |> select(Extent, Year, cite_socialmedia:cite_policy)
 Hmisc::describe(o$cite_scientific)
 Hmisc::describe(o$cite_policy)
+Hmisc::describe(o$cite_socialmedia)
 
+# Regress against time the citations
+fit <- lm(cite_scientific~Year, data = o)
+coef(fit)
+fit <- lm(cite_policy~Year, data = o)
+coef(fit) * 9
+plot(effects:::allEffects(fit))
+o <- dplyr::left_join(df, cit, by = c("newDOI" = "doi")) |> select(Extent, Year, cite_policy)
+colSums( table(o$cite_policy,o$Year)[-1,] ) |> mean()
+
+# Test
+o <- dplyr::left_join(df, cit, by = c("newDOI" = "doi")) |> select(cite_socialmedia:cite_policy)
+
+cor.test(o$cite_socialmedia, o$cite_scientific) # Social media does not explain citation rate
+cor.test(o$cite_socialmedia, o$cite_policy) # Also not in policy documents
+cor.test(o$cite_scientific, o$cite_policy) # However more widely cited papers are more likely to be also cited by policy
 
 # ----------- #
 #### Basic plots ####
@@ -327,11 +342,6 @@ ggsave(plot = last_plot(),"figures/map_densitystudies.png", width = 10, height =
 # Idea 1: Are studies of larger study extent more often cited in research and policy contexts
 o <- left_join(df, cit, by = c("newDOI" = "doi")) |> dplyr::select(Extent,Year, cite_socialmedia:cite_policy)
 
-# Test
-cor.test(o$cite_socialmedia, o$cite_scientific) # Social media does not explain citation rate
-cor.test(o$cite_socialmedia, o$cite_policy) # Also not in policy documents
-cor.test(o$cite_scientific, o$cite_policy) # However more widely cited papers are more likely to be also cited by policy
-
 # Fit zero-inflated bayesian Poisson regressions
 fit1 <- brm(cite_scientific~Extent + (1|Year), data = o, family = zero_inflated_poisson(),backend = "cmdstanr") # Scientifically, no difference
 fit2 <- brm(cite_policy~Extent + (1|Year), data = o, family = zero_inflated_poisson(),backend = "cmdstanr") # Scientifically, no difference
@@ -353,6 +363,9 @@ o <- bind_rows(
 # Save the partial results for later
 saveRDS(o, "resSaves/samples_citationrates.rds")
 o <- readRDS("resSaves/samples_citationrates.rds")
+o
+o$estimate__[o$Extent=="Europe" & o$type == "Policy documents"] / o$estimate__[o$Extent=="Local" & o$type == "Policy documents"]
+o$estimate__[o$Extent=="Europe" & o$type == "Scientific literature"] / o$estimate__[o$Extent=="Local" & o$type == "Scientific literature"]
 
 ggplot(o, aes(x = Extent, y = estimate__, ymin = lower__, ymax = upper__)) +
   mytheme +
@@ -405,6 +418,8 @@ saveRDS(o, "resSaves/samples_citationrates_complexity.rds")
 o <- readRDS("resSaves/samples_citationrates_complexity.rds")
 
 o <- o |> filter(value=="1")
+o$estimate__[o$Extent=="Europe" & o$type == "Policy documents"] / o$estimate__[o$Extent=="Local" & o$type == "Policy documents"]
+o$estimate__[o$Extent=="Europe" & o$type == "Scientific literature"] / o$estimate__[o$Extent=="Local" & o$type == "Scientific literature"]
 
 ggplot(o, aes(x = name, y = estimate__, ymin = lower__, ymax = upper__)) +
   mytheme +
@@ -490,6 +505,8 @@ o <- bind_rows(
 # Save the partial results for later
 saveRDS(o, "resSaves/samples_citationrates_policy.rds")
 o <- readRDS("resSaves/samples_citationrates_policy.rds")
+
+o$estimate__[o$Extent=="Europe" & o$type == "Policy documents"] / o$estimate__[o$Extent=="Local" & o$type == "Policy documents"]
 
 ggplot(o, aes(x = Policy.relevance, y = estimate__, ymin = lower__, ymax = upper__)) +
   mytheme +

@@ -1,0 +1,164 @@
+---
+title: "Exploring European conservation planning studies"
+output: 
+  flexdashboard::flex_dashboard:
+    storyboard: true
+    social: menu
+    theme: 
+      version: 4
+      bootswatch: yeti
+      
+---
+
+```{r setup, include=FALSE, warning=FALSE, echo=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(ggplot2)
+library(sf)
+library(plotly)
+library(leaflet)
+```
+
+
+```{r Load data, include=FALSE, warning=FALSE, message=FALSE}
+# Load in formatted literature extract
+df <- readRDS("resSaves/literature_formatted.rds")
+
+# Load in formatted citation data
+cit <- readRDS("resSaves/citation_extraction_formatted.rds") |> dplyr::select(-date)
+
+# And location information
+locations <- readRDS("resSaves/location_match.rds")
+
+terrestrial <- st_read("extdata/TerrestrialRegions.gpkg", quiet = TRUE) |>
+  filter(!SOVEREIGNT %in% c("Iceland", "Moldova"))
+marine <- st_read("extdata/MarineRegions.gpkg", quiet = TRUE) |> 
+  filter(!(GEONAME %in% c("Jan Mayen Exclusive Economic Zone","Joint regime area Iceland / Norway (Jan Mayen)",
+                           "Icelandic Exclusive Economic Zone",
+                          "Greenlandic Exclusive Economic Zone")))
+
+```
+
+
+### Spatial coverage of the studies across varying scale
+
+```{r Prepare data and render spatial density}
+o <- df
+o$Region[o$Region=="Mediteranean"] <- "Mediterranean"
+assertthat::assert_that(!anyNA(o$Region))
+
+## Marine - Convert Macro-regions into countries
+o$Region[o$Realm=="Marine" & o$Region=="Mediterranean"] <- 
+  "Spain, France, Italy, Croatia, Greece, Cyprus, Malta, Monaco, Montenegro, Albania, Bosnia and Herzegovina, Slovenia"
+o$Region[o$Realm=="Marine" & o$Region=="Adriatic-Ionian Region"] <- 
+  "Italy, Croatia, Slovenia, Greece, Montenegro, Albania, Bosnia and Herzegovina"
+
+## Terrestrial macro-regions
+o$Region[o$Realm=="Terrestrial" & o$Region =="Mediterranean"] <-
+  "Spain, France, Italy, Croatia, Greece, Cyprus, Morocco, Vatican, Northern Cyprus, Cyprus No Mans Area,
+  San Marino, Andorra, Portugal, Vatican, Malta, Monaco, Montenegro, Albania, Bosnia and Herzegovina, Slovenia"
+
+o$Region[o$Realm=="Terrestrial" & o$Region =="Alpes"] <- 
+  "Austria, Switzerland"
+o$Region[o$Realm=="Terrestrial" & o$Region == "Danube catchment"] <- 
+  "Austria, Bulgaria, Hungary, Romania, Germany, Croatia"
+
+# For European studies
+o$Region[o$Region=="Europe" & o$Realm=="Marine"] <- paste0(unique(marine$SOVEREIGN1), collapse = ", ")
+o$Region[o$Region=="Europe" & o$Realm=="Terrestrial"] <- paste0(unique(terrestrial$SOVEREIGNT),collapse = ", ") 
+
+# Split by region
+o <- tidyr::separate_rows(df, Region)
+
+# Merge with terrestrial and freshwater
+
+# --- #
+# Leaflet rendering
+leaflet() %>%
+  addTiles() %>%
+  addMarkers(lng=174.768, lat=-36.852, popup="The birthplace of R")
+```
+
+
+***
+
+https://rstudio.github.io/leaflet/
+
+- Interactive panning/zooming
+
+- Compose maps using arbitrary combinations of map tiles, markers, polygons, lines, popups, and GeoJSON.
+
+- Create maps right from the R console or RStudio
+
+- Embed maps in knitr/R Markdown documents and Shiny apps
+
+- Easily render Spatial objects from the sp package, or data frames with latitude/longitude columns
+
+- Use map bounds and mouse events to drive Shiny logic
+
+
+### Searchable table of all studies found through the review
+
+```{r Prepare data and visualize as searchable table}
+# Split up the country
+df$Region
+
+o <- df |> 
+  dplyr::select(-Reviewer, -Suitable) |> 
+  # Select relevant tables
+  dplyr::select(Extent:Stakeholder.involvement, 
+                Year, Title, DOI, newDOI) |> 
+  # Joining in citations
+  dplyr::full_join(cit |> dplyr::select(-crossref_citationcount), by = c("newDOI" = "doi")) |> 
+  dplyr::select(-newDOI) |> 
+  distinct()
+
+DT::datatable(o,
+              rownames = TRUE, 
+              style = 'auto', # 'bootstrap4'
+              # Filter
+              filter = list(position = 'top', clear = TRUE, plain = TRUE),
+              plugins = c("select", "searchHighlight"),
+              options = list(
+                pageLength = 25
+              ))
+```
+
+### Summary plots of common properties from the reviewed studies
+
+
+```{r}
+library(plotly)
+p <- ggplot(data = diamonds, aes(x = cut, fill = clarity)) +
+            geom_bar(position = "dodge")
+ggplotly(p)
+```
+
+
+### Dygraphs provides rich facilities for charting time-series data in R and includes support for many interactive features.
+
+```{r}
+library(dygraphs)
+lungDeaths <- cbind(mdeaths, fdeaths)
+dygraph(lungDeaths, main = "Deaths from Lung Diseases in the UK") %>%
+  dySeries("mdeaths", label = "Male") %>%
+  dySeries("fdeaths", label = "Female") %>%
+  dyOptions(stackedGraph = TRUE) %>%
+  dyRangeSelector(height = 20) %>% 
+  dyRangeSelector()
+```
+
+***
+
+https://rstudio.github.io/dygraphs/
+
+- Automatically plots xts time series objects (or any object convertible to xts).
+
+- Highly configurable axis and series display (including optional second Y-axis).
+
+- Rich interactive features including zoom/pan and series/point highlighting.
+
+- Display upper/lower bars (e.g. prediction intervals) around series.
+- Various graph overlays including shaded regions, event lines, and point annotations.
+
+
