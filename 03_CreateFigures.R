@@ -40,13 +40,14 @@ dir.create("figures", showWarnings = FALSE)
 # ----------- #
 #### Basic statistics ####
 
-# Number of studies per extent
-table(df$Extent);table(df$Extent)/nrow(df)
-
-sort(table(locations$country),decreasing = TRUE) / nrow(locations)
-
 # Number of studies per Realm
 table(df$Realm); table(df$Realm)/nrow(df)
+
+# Proportions
+sort(table(locations$country),decreasing = TRUE) / nrow(locations)
+
+# Number of studies per extent
+table(df$Extent);table(df$Extent)/nrow(df)
 
 # Number of studies with different planning purpose
 table(df$Planning.purpose); table(df$Planning.purpose) / nrow(df)
@@ -58,7 +59,7 @@ table(df$Method); table(df$Method) / nrow(df)
 table(df$Ecosystem.specificity); table(df$Ecosystem.specificity) / nrow(df)
 
 # Number of features per type
-df |> count(Biodiversity.type) / nrow(df)
+df |> dplyr::count(Biodiversity.type) |> mutate(prop = n/nrow(df))
 df |> group_by(Biodiversity.type) |> summarise(m = mean(Number.of.features, na.rm=T),
                                                min = min(Number.of.features, na.rm = TRUE),
                                                max = max(Number.of.features, na.rm = TRUE))
@@ -68,12 +69,17 @@ df |> group_by(Biodiversity.type) |> summarise(m = mean(Number.of.features, na.r
 table(df$Connectivity); prop <- table(df$Connectivity) / nrow(df)
 sum(prop[-1]) # How many assessed anything in this direction
 
+table(df$Costs) / nrow(df)
+table(df$Connectivity) / nrow(df)
+
 # Current or future
 table(df$Period); table(df$Period) / nrow(df)
 sum((table(df$Period) / nrow(df))[-1])
 
 # Stakeholders
 table(df$Stakeholder.involvement); table(df$Stakeholder.involvement) / nrow(df)
+
+df |> group_by(Extent) |> summarise(n = sum(Stakeholder.involvement=="yes"))
 
 # Land-use constraints
 df2 <- df |> filter(Planning.purpose!='Representation')
@@ -224,7 +230,6 @@ g1 <- ggplot(df, aes(x = Biodiversity.type, y = Number.of.features)) +
   labs(y = expression(log10(Features)), x = "")
 ggsave(filename = "figures/SI_Figure1.png", plot = g1, width = 8, height = 8, dpi = 400)
 
-
 # --- #
 # SI Figure 2
 # Does stakeholder involvement differ by spatial extent?
@@ -337,6 +342,11 @@ ggsave(plot = last_plot(),"figures/map_densitystudies.png", width = 10, height =
 
 #### Specific plots and hypotheses ####
 # Here we explore specific hypotheses surrounding the collated citation information
+
+# Some stats
+Hmisc::describe(cit$cite_scientific)
+Hmisc::describe(cit$cite_policy)
+Hmisc::describe(cit$cite_socialmedia)
 
 # ---- #
 # Idea 1: Are studies of larger study extent more often cited in research and policy contexts
@@ -505,8 +515,6 @@ o <- bind_rows(
 # Save the partial results for later
 saveRDS(o, "resSaves/samples_citationrates_policy.rds")
 o <- readRDS("resSaves/samples_citationrates_policy.rds")
-
-o$estimate__[o$Extent=="Europe" & o$type == "Policy documents"] / o$estimate__[o$Extent=="Local" & o$type == "Policy documents"]
 
 ggplot(o, aes(x = Policy.relevance, y = estimate__, ymin = lower__, ymax = upper__)) +
   mytheme +
