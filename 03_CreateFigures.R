@@ -1,5 +1,7 @@
 library(tidyverse)
 library(tidyr)
+library(extrafont)
+loadfonts(device="win")       #Register fonts for Windows bitmap output
 library(readxl)
 library(ggplot2)
 library(ggthemes)
@@ -11,7 +13,7 @@ library(brms)
 library(tmap)
 # Default theme and design
 mytheme <- theme_bw(base_size = 20) +
-  theme(
+  theme(text = element_text(family = "Times New Roman"),
     panel.background = element_rect(#fill = "transparent",
                                     colour = NA_character_), # necessary to avoid drawing panel outline
     plot.background = element_rect(fill = "white",
@@ -122,6 +124,17 @@ cor.test(o$cite_socialmedia, o$cite_scientific) # Social media does not explain 
 cor.test(o$cite_socialmedia, o$cite_policy) # Also not in policy documents
 cor.test(o$cite_scientific, o$cite_policy) # However more widely cited papers are more likely to be also cited by policy
 
+# Are studies with multi-criteria planning more often cited?
+o <- dplyr::left_join(df, cit, by = c("newDOI" = "doi"))
+o <- o |> filter(Planning.purpose!='Representation') |>
+  dplyr::mutate(mult = fct_collapse(Multiple.objectives.or.constraints,
+                                    "None" = "None",
+                                    "Multi-objective/criteria" = "Multi-objective/criteria",
+                                    other_level = "Other"
+                                    ))
+o |> group_by(mult) |> summarise(cit = mean(cite_scientific,na.rm = TRUE),
+                                 citp = mean(cite_policy, na.rm = TRUE))
+(27.3/24.8)-1
 # ----------- #
 #### Basic plots ####
 # All kinds of plots that do not have any specific hypothesis or
