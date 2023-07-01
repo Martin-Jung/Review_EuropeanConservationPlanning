@@ -1,6 +1,6 @@
-# Purpose of this script is to format the search terms and align them
-# https://elizagrames.github.io/litsearchr/litsearchr_vignette.html
-library(litsearchr)
+# Purpose of this script is to format the search terms and align them so
+# they can all be placed in one sheet. The exported csv files contain
+# all the files collected from Scopus
 library(tidyverse)
 library(assertthat)
 library(readxl)

@@ -216,3 +216,44 @@ assert_that(
   all(out_form$cite_scientific>=0)
 )
 saveRDS(out_form, "resSaves/citation_extraction_formatted.rds")
+
+# --------------- #
+#### Format references for export to Zenodo ####
+# Get latest file
+data <- read_xlsx("LiteratureExtracts/20220923_FilteredLiteratureFinal.xlsx",sheet = 1) |>
+  filter(Suitable == 1) |>
+  dplyr::arrange(Year) # Sort by year
+# Make names
+names(data) <- make.names(names(data))
+
+# Ignore unrelevant columns
+data <- data |> dplyr::select(-Reviewer, -Suitable,-Cited.by, -Abstract) |>
+  dplyr::mutate(ID = 1:n()) |>
+  dplyr::relocate(ID, .before = "Extent") |>
+  dplyr::rename(Journal = "Source.title")
+
+# Add Manually added where missing
+data$Source[is.na(data$Source)] <- "Manual"
+data$Document.Type[is.na(data$Document.Type)] <- "Article"
+
+# Format DOI
+data$DOI <- stringr::str_replace_all(data$DOI, "http://dx.doi.org/","")
+data$DOI <- str_replace_all(data$DOI, "https://dx.doi.org/","")
+data$DOI <- str_replace_all(data$DOI, "Https://dx.doi.org/","")
+data$DOI <- str_replace_all(data$DOI, "https://doi.org/","")
+data$DOI <- str_replace_all(data$DOI, "https://","")
+data$DOI <- str_replace_all(data$DOI, "dx.doi.org/","")
+data$DOI <- stringr::str_trim(data$DOI,side = "both")
+
+# Add citation information in
+cit <- readRDS("resSaves/citation_extraction_formatted.rds") |>
+  dplyr::select(doi, cite_scientific, cite_policy) |>
+  dplyr::rename(cite_scientific_May2023 = "cite_scientific", cite_policy_May2023 = "cite_policy")
+
+data <- data |> left_join(cit, by = c('DOI' = "doi"))
+# Fill missing
+data$cite_scientific_May2023[is.na(data$cite_scientific_May2023)] <-0
+data$cite_policy_May2023[is.na(data$cite_policy_May2023)] <- 0
+
+# Write output
+write.csv(data, "resSaves/JungEtAl_EuropeanConservationPlanningStudies.csv",row.names = FALSE)

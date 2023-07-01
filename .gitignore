@@ -5,3 +5,5 @@
 
 *.pptx
 figures/*.pptx
+*.xlsx
+extdata/*
