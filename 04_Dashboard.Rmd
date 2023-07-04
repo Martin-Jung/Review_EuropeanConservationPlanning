@@ -6,12 +6,14 @@ output:
     social: menu
     theme: 
       version: 4
-      bootswatch: yeti
+      bootswatch: flatly
       
 ---
 
 ```{r setup, include=FALSE, warning=FALSE, echo=FALSE}
 library(flexdashboard)
+library(ggthemes)
+library(scico)
 library(tidyverse)
 library(ggplot2)
 library(sf)
@@ -39,7 +41,6 @@ marine <- st_read("extdata/MarineRegions.gpkg", quiet = TRUE) |>
 
 ```
 
-
 ### Spatial coverage of the studies across varying scale
 
 ```{r Prepare data and render spatial density}
@@ -55,8 +56,7 @@ o$Region[o$Realm=="Marine" & o$Region=="Adriatic-Ionian Region"] <-
 
 ## Terrestrial macro-regions
 o$Region[o$Realm=="Terrestrial" & o$Region =="Mediterranean"] <-
-  "Spain, France, Italy, Croatia, Greece, Cyprus, Morocco, Vatican, Northern Cyprus, Cyprus No Mans Area,
-  San Marino, Andorra, Portugal, Vatican, Malta, Monaco, Montenegro, Albania, Bosnia and Herzegovina, Slovenia"
+  "Spain, France, Italy, Croatia, Greece, Cyprus, Morocco, Vatican, Northern Cyprus, Cyprus No Mans Area, San Marino, Andorra, Portugal, Vatican, Malta, Monaco, Montenegro, Albania, Bosnia and Herzegovina, Slovenia"
 
 o$Region[o$Realm=="Terrestrial" & o$Region =="Alpes"] <- 
   "Austria, Switzerland"
@@ -70,7 +70,7 @@ o$Region[o$Region=="Europe" & o$Realm=="Terrestrial"] <- paste0(unique(terrestri
 # Split by region
 o <- tidyr::separate_rows(df, Region)
 
-# Merge with terrestrial and freshwater
+# Merge with terrestrial and marine shapefiles
 
 # --- #
 # Leaflet rendering
@@ -82,27 +82,14 @@ leaflet() %>%
 
 ***
 
-https://rstudio.github.io/leaflet/
+- Spatial overview of published conservation plannning studies
 
-- Interactive panning/zooming
-
-- Compose maps using arbitrary combinations of map tiles, markers, polygons, lines, popups, and GeoJSON.
-
-- Create maps right from the R console or RStudio
-
-- Embed maps in knitr/R Markdown documents and Shiny apps
-
-- Easily render Spatial objects from the sp package, or data frames with latitude/longitude columns
-
-- Use map bounds and mouse events to drive Shiny logic
 
 
 ### Searchable table of all studies found through the review
 
 ```{r Prepare data and visualize as searchable table}
 # Split up the country
-df$Region
-
 o <- df |> 
   dplyr::select(-Reviewer, -Suitable) |> 
   # Select relevant tables
@@ -124,41 +111,131 @@ DT::datatable(o,
               ))
 ```
 
-### Summary plots of common properties from the reviewed studies
-
-
-```{r}
-library(plotly)
-p <- ggplot(data = diamonds, aes(x = cut, fill = clarity)) +
-            geom_bar(position = "dodge")
-ggplotly(p)
-```
-
-
-### Dygraphs provides rich facilities for charting time-series data in R and includes support for many interactive features.
+### Timeline of published studies by Extent
 
 ```{r}
 library(dygraphs)
-lungDeaths <- cbind(mdeaths, fdeaths)
-dygraph(lungDeaths, main = "Deaths from Lung Diseases in the UK") %>%
-  dySeries("mdeaths", label = "Male") %>%
-  dySeries("fdeaths", label = "Female") %>%
+o <- df |> dplyr::group_by(Extent, Year) |> summarise(N = n()) |> arrange(Year) |> 
+  tidyr::pivot_wider(names_from = Extent, values_from = N)
+
+dygraph(o, main = "Local conservation planning studies\nremain the most common",xlab = "Number of studies (N)") %>%
+  dySeries("Local", label = "Local",color = "orange") %>%
+  dySeries("National", label = "National",color = "lightblue") %>%
+  dySeries("Regional", label = "Regional",color = "violet") %>%
+  dySeries("Europe", label = "Europe",color = "red") %>%
   dyOptions(stackedGraph = TRUE) %>%
   dyRangeSelector(height = 20) %>% 
   dyRangeSelector()
 ```
 
+
+### Timeline of published studies by Method
+
+```{r}
+library(dygraphs)
+
+o <- df |> 
+  dplyr::mutate(Method = make.names(stringr::str_trim(Method))) |> 
+  dplyr::mutate(Method = forcats::fct_collapse(Method, Overlay.Others = c("GIS.Overlay", "Other"))) |> 
+  dplyr::group_by(Method, Year) |> summarise(N = n()) |> arrange(Year) |> 
+  tidyr::pivot_wider(names_from = Method, values_from = N)
+
+dygraph(o, main = "Overlays and scoring method\n continue to be used for planning",xlab = "Number of studies (N)") %>%
+  dySeries("Overlay.Others", label = "Overlays",color = "orange") %>%
+  dySeries("Marxan.", label = "Marxan",color = "lightblue") %>%
+  dySeries("Zonation", label = "Zonation",color = "violet") %>%
+  dySeries("Integer.programming", label = "Integer.programming",color = "red") %>%
+  dyOptions(stackedGraph = TRUE) %>%
+  dyRangeSelector(height = 20) %>% 
+  dyRangeSelector()
+```
+
+
+### Common complexity properties of the reviewed studies {data-commentary-width=200}
+
+```{r}
+# Summarize different properties
+
+# Period
+o1 <- df |> drop_na(Planning.purpose) |> 
+  dplyr::mutate(Period = forcats::fct_collapse(Period, Future = c("Future", "Both"))) |> 
+  count(Planning.purpose, Period) |>
+  rename(var1 = Planning.purpose, var2 = Period) |>
+  group_by(var1) |> mutate(prop = prop.table(n)) |> mutate(type = "Period")
+
+# Multiple objectives
+o2 <- df |> drop_na(Planning.purpose) |> count(Planning.purpose, Multiple.objectives.or.constraints) |>
+  rename(var1 = Planning.purpose, var2 = Multiple.objectives.or.constraints) |>
+  group_by(var1) |> mutate(prop = prop.table(n)) |> mutate(type = "Land use")
+
+# Connectivity
+o3 <- df |> drop_na(Planning.purpose) |> count(Planning.purpose, Connectivity) |>
+  rename(var1 = Planning.purpose, var2 = Connectivity) |>
+  group_by(var1) |> mutate(prop = prop.table(n)) |> mutate(type = "Connectivity")
+
+# Stakeholder involvement
+o4 <- df |> drop_na(Planning.purpose) |> count(Planning.purpose, Stakeholder.involvement) |>
+  rename(var1 = Planning.purpose, var2 = Stakeholder.involvement) |>
+  group_by(var1) |> mutate(prop = prop.table(n)) |> mutate(type = "Stakeholder involvement")
+
+# Combine them all
+o <- bind_rows(o1,o2,o3,o4)
+o$var2 <- forcats::fct_collapse(o$var2, None = c("None", "no"))
+o$var2 <- forcats::fct_collapse(o$var2, Included = c("yes"))
+
+p1 <- ggplot(o |> dplyr::rename(Purpose = var1, variable = var2),
+             aes(x = Purpose, y = n, fill = variable)) +
+  theme_base(base_size = 14) +
+  geom_bar(stat = "identity",position = position_dodge(.5)) +
+  scale_fill_stata() +
+  facet_wrap(~type, as.table = TRUE) +
+  guides(fill = guide_legend(title = "")) +
+  theme(legend.position = "bottom",
+        axis.text.x.bottom = element_text(angle = 60, hjust = 1,size = 8)) +   
+  labs(y = "Number of studies", x = "")
+p1
+ggplotly(p1)
+```
+
+
 ***
 
-https://rstudio.github.io/dygraphs/
+- Structural and boundary connectivity constraints are mostly applied in priority setting
 
-- Automatically plots xts time series objects (or any object convertible to xts).
+- The use of costs for common for accounting for different land uses, while multi-objective optimizations is more prevalent for planning for management actions.
 
-- Highly configurable axis and series display (including optional second Y-axis).
+- Future conditions of features or other elements of the planning are rarely considered.
 
-- Rich interactive features including zoom/pan and series/point highlighting.
+- Stakeholders are rarely included across all types of studies
 
-- Display upper/lower bars (e.g. prediction intervals) around series.
-- Various graph overlays including shaded regions, event lines, and point annotations.
+### Average number of citations per Extent
 
+```{r}
+# Format DOI
+df$newDOI <- stringr::str_replace_all(df$DOI, "http://dx.doi.org/","")
+df$newDOI <- str_replace_all(df$newDOI, "https://dx.doi.org/","")
+df$newDOI <- str_replace_all(df$newDOI, "Https://dx.doi.org/","")
+df$newDOI <- str_replace_all(df$newDOI, "https://doi.org/","")
+df$newDOI <- str_replace_all(df$newDOI, "https://","")
+
+o <- dplyr::left_join(df, cit, by = c("newDOI" = "doi") ) 
+
+# Filter
+oo <- o |> tidyr::drop_na(Extent) |> 
+  dplyr::select(Extent, cite_scientific, cite_policy) |> 
+  tidyr::pivot_longer(cols = -1,names_to = "Type")
+oo$Type <- factor(oo$Type, c("cite_scientific","cite_policy"),
+                  labels = c("Scientific", "Policy"))
+
+g1 <- ggplot(oo,
+       aes(x = Extent, y = value),
+       fill = Type) +
+  theme_base(base_size = 14) +
+  geom_boxplot() + 
+  scale_fill_tableau() +
+  facet_wrap(~Type, nrow = 1, scales = "free") +
+  labs(y = "Number of citations", x = "")
+
+ggplotly(g1)
+```
 
