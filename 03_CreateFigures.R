@@ -335,6 +335,7 @@ raster::nlayers(out)
 
 ras <- sum(out, na.rm = TRUE)
 ras[ras==0] <- NA
+writeRaster(ras, "resSaves/AggregatedNumberStudies.tif") # Make a copy
 # plot(ras, col = ibis.iSDM:::ibis_colours$sdm_colour )
 
 # m <- raster::mask(ras, template, inverse = TRUE)

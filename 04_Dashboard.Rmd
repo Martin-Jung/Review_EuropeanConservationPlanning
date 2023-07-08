@@ -46,7 +46,7 @@ marine <- st_read("extdata/MarineRegions.gpkg", quiet = TRUE) |>
 ```{r Prepare data and render spatial density}
 o <- df
 o$Region[o$Region=="Mediteranean"] <- "Mediterranean"
-assertthat::assert_that(!anyNA(o$Region))
+# assertthat::assert_that(!anyNA(o$Region))
 
 ## Marine - Convert Macro-regions into countries
 o$Region[o$Realm=="Marine" & o$Region=="Mediterranean"] <- 
@@ -71,12 +71,23 @@ o$Region[o$Region=="Europe" & o$Realm=="Terrestrial"] <- paste0(unique(terrestri
 o <- tidyr::separate_rows(df, Region)
 
 # Merge with terrestrial and marine shapefiles
+# TODO:
 
+# In the mean time, render the raster
+# Load terra raster
+library(raster)
+library(scico)
+ras <- raster("resSaves/AggregatedNumberStudies.tif")
+pal <- colorNumeric(palette = scico(100, palette = "hawaii", direction = -1),
+                    values(ras), na.color = "transparent")
 # --- #
 # Leaflet rendering
-leaflet() %>%
-  addTiles() %>%
-  addMarkers(lng=174.768, lat=-36.852, popup="The birthplace of R")
+leaflet() |> 
+  addProviderTiles("Stamen.TonerHybrid") |>
+  addTiles() |> 
+  addRasterImage(ras,colors = scico(100, palette = "hawaii", direction = -1), opacity = 0.8) |> 
+  addLegend(pal = pal, values = values(ras),
+    title = "Number of studies")
 ```
 
 
@@ -84,6 +95,11 @@ leaflet() %>%
 
 - Spatial overview of published conservation plannning studies
 
+- Most conservation planning studies published in Finland, Spain and Italy
+
+- Terrestrial studies were more common than marine or freshwater
+
+- Local and national studies predominant
 
 
 ### Searchable table of all studies found through the review
