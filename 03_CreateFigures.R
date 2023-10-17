@@ -103,7 +103,7 @@ o$score <- ifelse(o$Multiple.objectives.or.constraints=="None",0,1) +
 o |> filter(score == 4)
 
 # --- #
-o <- dplyr::left_join(df, cit, by = c("newDOI" = "doi")) |> select(Extent, Year, cite_socialmedia:cite_policy)
+o <- dplyr::left_join(df, cit, by = c("newDOI" = "doi")) |> dplyr::select(Extent, Year, cite_socialmedia:cite_policy)
 Hmisc::describe(o$cite_scientific)
 Hmisc::describe(o$cite_policy)
 Hmisc::describe(o$cite_socialmedia)
@@ -114,8 +114,15 @@ coef(fit)
 fit <- lm(cite_policy~Year, data = o)
 coef(fit) * 9
 plot(effects:::allEffects(fit))
-o <- dplyr::left_join(df, cit, by = c("newDOI" = "doi")) |> select(Extent, Year, cite_policy)
+o <- dplyr::left_join(df, cit, by = c("newDOI" = "doi")) |> dplyr::select(Extent, Year, cite_policy)
 colSums( table(o$cite_policy,o$Year)[-1,] ) |> mean()
+
+# Has the time to first citation decreased?
+oo <- o |> mutate(lag = 2022 - Year, firstcite = factor(ifelse(cite_policy>0,"1","0"))) |>
+  left_join(o |> group_by(Year) |> summarise(N = n())) |> tidyr::drop_na(firstcite)
+summary(fit <-  glmer(firstcite ~ N + (N|Year), data = oo,family = binomial()) )
+plot(effects:::allEffects(fit))
+abs(fixef(fit)[2])*365
 
 # Test
 o <- dplyr::left_join(df, cit, by = c("newDOI" = "doi")) |> select(cite_socialmedia:cite_policy)
@@ -215,6 +222,7 @@ ggplot(o, aes(x = var1, y = var2, size = n, colour = prop)) +
   theme(plot.title = element_text(hjust = 0.5),
         legend.text = element_text(color = "black"), legend.title = element_text(color = "black") )
 ggsave("figures/exploratory_bubble.png",width = 12,height = 10,dpi = 400)
+ggsave("figures/exploratory_bubble.svg",width = 12,height = 10,dpi = 400)
 
 #### Supplementary figures ####
 # SI Figure 1 #
@@ -340,17 +348,19 @@ writeRaster(ras, "resSaves/AggregatedNumberStudies.tif") # Make a copy
 
 # m <- raster::mask(ras, template, inverse = TRUE)
 
+ras <- terra::rast("resSaves/AggregatedNumberStudies.tif")
 # Clip terrestrial to European extent
-ter <- terrestrial |> st_crop(extent(ras))
+ter <- terrestrial |> st_crop(terra::ext(ras))
 
 ggR(ras, geom_raster=TRUE) +
   mytheme + theme(panel.background = element_blank(),plot.background = element_blank()) +
+  theme(text = element_text(family = "Times New Roman")) +
   theme(panel.grid.major = element_line(colour = "grey60")) + # Increase visibility of grid lines
-  scale_fill_gradientn(colors = scico(100, palette = "hawaii", direction = -1), na.value = NA,
+  scale_fill_gradientn(colors = scico(100, palette = "glasgow", direction = -1), na.value = NA,
                        guide = guide_colourbar(title = "Number of studies",barwidth = unit(3, 'in'),
                                                label.theme = element_text(color = "black",size = 20),
                                                title.theme = element_text(color = "black",size = 19)  ) ) +
-  geom_sf(data = ter, fill = NA, colour = "grey90", linewidth = .75, show.legend = FALSE) +
+  geom_sf(data = ter, fill = NA, colour = "grey90", linewidth = .25, show.legend = FALSE) +
   theme(legend.position = "bottom",axis.ticks = element_blank(), axis.text = element_blank()) + labs(x = "", y = "")
 ggsave(plot = last_plot(),"figures/map_densitystudies.png", width = 10, height = 8, dpi = 400)
 
